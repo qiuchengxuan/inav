@@ -59,7 +59,7 @@ FILE_COMPILE_FOR_SPEED
 #include "sensors/gyro.h"
 #include "sensors/sensors.h"
 
-
+#include "fc/rc_modes.h"
 /**
  * In Cleanflight accelerometer is aligned in the following way:
  *      X-axis = Forward
@@ -402,7 +402,7 @@ static void imuMahonyAHRSupdate(float dt, const fpVector3_t * gyroBF, const fpVe
 
         fpVector3_t         vErr;
 
-        if (velEF && vVelEF_initialized) {
+        if (velEF && vVelEF_initialized && IS_RC_MODE_ACTIVE(BOXACCCOMP)) {
             // We have valid velocity from GPS, use that to calculate correction vector
             fpVector3_t vAccEF;
 
