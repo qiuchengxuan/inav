@@ -38,7 +38,7 @@
 #define OSD_AHI_H_SYM_COUNT 9
 #define OSD_AHI_V_SYM_COUNT 6
 
-#define OSD_HEADING_GRAPH_WIDTH 9
+#define OSD_HEADING_GRAPH_WIDTH 15
 #define OSD_HEADING_GRAPH_DECIDEGREES_PER_CHAR 225
 
 typedef struct displayPort_s displayPort_t;

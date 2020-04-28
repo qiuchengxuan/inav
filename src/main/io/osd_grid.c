@@ -25,12 +25,14 @@
  */
 
 #include <math.h>
+#include <string.h>
 
 #include "platform.h"
 
 #if defined(USE_OSD)
 
 #include "common/maths.h"
+#include "common/printf.h"
 #include "common/utils.h"
 
 #include "drivers/display.h"
@@ -155,46 +157,33 @@ void osdGridDrawArtificialHorizon(displayPort_t *display, unsigned gx, unsigned 
 
 void osdGridDrawHeadingGraph(displayPort_t *display, unsigned gx, unsigned gy, int heading)
 {
-    static const uint8_t graph[] = {
-        SYM_HEADING_LINE,
-        SYM_HEADING_E,
-        SYM_HEADING_LINE,
-        SYM_HEADING_DIVIDED_LINE,
-        SYM_HEADING_LINE,
-        SYM_HEADING_S,
-        SYM_HEADING_LINE,
-        SYM_HEADING_DIVIDED_LINE,
-        SYM_HEADING_LINE,
-        SYM_HEADING_W,
-        SYM_HEADING_LINE,
-        SYM_HEADING_DIVIDED_LINE,
-        SYM_HEADING_LINE,
-        SYM_HEADING_N,
-        SYM_HEADING_LINE,
-        SYM_HEADING_DIVIDED_LINE,
-        SYM_HEADING_LINE,
-        SYM_HEADING_E,
-        SYM_HEADING_LINE,
-        SYM_HEADING_DIVIDED_LINE,
-        SYM_HEADING_LINE,
-        SYM_HEADING_S,
-        SYM_HEADING_LINE,
-        SYM_HEADING_DIVIDED_LINE,
-        SYM_HEADING_LINE,
-        SYM_HEADING_W,
-        SYM_HEADING_LINE,
-    };
-    char buf[OSD_HEADING_GRAPH_WIDTH + 1];
-    int16_t h = DECIDEGREES_TO_DEGREES(heading);
-    if (h >= 180) {
-        h -= 360;
+    char buf[OSD_HEADING_GRAPH_WIDTH + 5];
+    memset(&buf[2], ' ', OSD_HEADING_GRAPH_WIDTH);
+    heading = DECIDEGREES_TO_DEGREES(heading);
+    if (heading < 0) {
+        heading += 360;
     }
-    int hh = h * 4;
-    hh = hh + 720 + 45;
-    hh = hh / 90;
-    memcpy_fn(buf, graph + hh + 1, sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
-    displayWrite(display, gx, gy, buf);
+    int16_t lower_heading = heading / 10 * 10;
+    int16_t upper_heading = lower_heading + 10;
+    int center = 2 + OSD_HEADING_GRAPH_WIDTH / 2;
+    int delta = (heading - lower_heading) * 3 / 5;
+    int lower_index = center - 1 - delta;
+    tfp_sprintf(&buf[lower_index], "%03d", lower_heading);
+    buf[lower_index + 3] = ' ';
+    int upper_index = lower_index + 6;
+    tfp_sprintf(&buf[upper_index], "%03d", upper_heading % 360);
+    buf[upper_index + 3] = ' ';
+    if (lower_index - 6 >= 0) {
+        tfp_sprintf(&buf[lower_index - 6], "%03d", (lower_heading + 360 - 10) % 360);
+        buf[lower_index - 3] = ' ';
+    }
+    if (upper_index + 6 < 2 + OSD_HEADING_GRAPH_WIDTH) {
+        tfp_sprintf(&buf[upper_index + 6], "%03d", (upper_heading + 10) % 360);
+    }
+    buf[lower_index - 2] = buf[lower_index + 4] = buf[upper_index + 4] = '.';
+    buf[2 + OSD_HEADING_GRAPH_WIDTH] = '\0';
+    displayWrite(display, gx, gy, &buf[2]);
+    displayWrite(display, gx + OSD_HEADING_GRAPH_WIDTH / 2, gy + 1, "^");
 }
 
 #endif

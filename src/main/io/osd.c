@@ -378,9 +378,9 @@ static int32_t osdConvertVelocityToUnit(int32_t vel)
     case OSD_UNIT_UK:
         FALLTHROUGH;
     case OSD_UNIT_IMPERIAL:
-        return (vel * 224) / 10000; // Convert to mph
+        FALLTHROUGH;
     case OSD_UNIT_METRIC:
-        return (vel * 36) / 1000;   // Convert to kmh
+        return vel * 194 / 10000;
     }
     // Unreachable
     return -1;
@@ -390,16 +390,15 @@ static int32_t osdConvertVelocityToUnit(int32_t vel)
  * Converts velocity into a string based on the current unit system.
  * @param alt Raw velocity (i.e. as taken from gpsSol.groundSpeed in centimeters/seconds)
  */
-void osdFormatVelocityStr(char* buff, int32_t vel, bool _3D)
+void osdFormatVelocityStr(char* buff, int32_t vel)
 {
     switch ((osd_unit_e)osdConfig()->units) {
     case OSD_UNIT_UK:
         FALLTHROUGH;
     case OSD_UNIT_IMPERIAL:
-        tfp_sprintf(buff, "%3d%c", (int)osdConvertVelocityToUnit(vel), (_3D ? SYM_3D_MPH : SYM_MPH));
-        break;
+        FALLTHROUGH;
     case OSD_UNIT_METRIC:
-        tfp_sprintf(buff, "%3d%c", (int)osdConvertVelocityToUnit(vel), (_3D ? SYM_3D_KMH : SYM_KMH));
+        tfp_sprintf(buff, "%5d", (int)osdConvertVelocityToUnit(vel));
         break;
     }
 }
@@ -448,25 +447,9 @@ void osdFormatAltitudeSymbol(char *buff, int32_t alt)
         case OSD_UNIT_UK:
             FALLTHROUGH;
         case OSD_UNIT_IMPERIAL:
-            if (osdFormatCentiNumber(buff , CENTIMETERS_TO_CENTIFEET(alt), 1000, 0, 2, 3)) {
-                // Scaled to kft
-                buff[3] = SYM_ALT_KFT;
-            } else {
-                // Formatted in feet
-                buff[3] = SYM_ALT_FT;
-            }
-            buff[4] = '\0';
-            break;
+            FALLTHROUGH;
         case OSD_UNIT_METRIC:
-            // alt is alredy in cm
-            if (osdFormatCentiNumber(buff, alt, 1000, 0, 2, 3)) {
-                // Scaled to km
-                buff[3] = SYM_ALT_KM;
-            } else {
-                // Formatted in m
-                buff[3] = SYM_ALT_M;
-            }
-            buff[4] = '\0';
+            osdFormatCentiNumber(buff , CENTIMETERS_TO_CENTIFEET(alt), 1000, 0, 2, 5);
             break;
     }
 }
@@ -859,8 +842,8 @@ static void osdUpdateBatteryCapacityOrVoltageTextAttributes(textAttributes_t *at
 
 void osdCrosshairPosition(uint8_t *x, uint8_t *y)
 {
-    *x = osdDisplayPort->cols / 2;
-    *y = osdDisplayPort->rows / 2;
+    *x = osdDisplayPort->cols / 2 - 1;
+    *y = osdDisplayPort->rows / 2 - 1;
     *y += osdConfig()->horizon_offset;
 }
 
@@ -1364,14 +1347,12 @@ static bool osdDrawSingleElement(uint8_t item)
         break;
 
     case OSD_GPS_SPEED:
-        osdFormatVelocityStr(buff, gpsSol.groundSpeed, false);
+        osdFormatVelocityStr(buff, gpsSol.groundSpeed);
         break;
 
     case OSD_3D_SPEED:
-        {
-            osdFormatVelocityStr(buff, osdGet3DSpeed(), true);
-            break;
-        }
+        osdFormatVelocityStr(buff, osdGet3DSpeed());
+        break;
 
     case OSD_GPS_LAT:
         osdFormatCoordinate(buff, SYM_LAT, gpsSol.llh.lat);
@@ -1406,17 +1387,16 @@ static bool osdDrawSingleElement(uint8_t item)
     case OSD_HOME_HEADING_ERROR:
         {
             buff[0] = SYM_HOME;
-            buff[1] = SYM_HEADING;
 
             if (isImuHeadingValid() && navigationPositionEstimateIsHealthy()) {
                 int16_t h = lrintf(CENTIDEGREES_TO_DEGREES((float)wrap_18000(DEGREES_TO_CENTIDEGREES((int32_t)GPS_directionToHome) - DECIDEGREES_TO_CENTIDEGREES((int32_t)osdGetHeading()))));
-                tfp_sprintf(buff + 2, "%4d", h);
+                tfp_sprintf(buff + 1, "%4d", h);
             } else {
-                strcpy(buff + 2, "----");
+                strcpy(buff + 1, "----");
             }
 
-            buff[6] = SYM_DEGREES;
-            buff[7] = '\0';
+            buff[5] = SYM_DEGREES;
+            buff[6] = '\0';
             break;
         }
 
@@ -1438,13 +1418,13 @@ static bool osdDrawSingleElement(uint8_t item)
 
     case OSD_HEADING:
         {
-            buff[0] = SYM_HEADING;
+            buff[0] = ' ';
             if (osdIsHeadingValid()) {
                 int16_t h = DECIDEGREES_TO_DEGREES(osdGetHeading());
                 if (h < 0) {
                     h += 360;
                 }
-                tfp_sprintf(&buff[1], "%3d", h);
+                tfp_sprintf(&buff[1], "%03d", h);
             } else {
                 buff[1] = buff[2] = buff[3] = '-';
             }
@@ -1633,11 +1613,11 @@ static bool osdDrawSingleElement(uint8_t item)
             char *p = "ACRO";
 
             if (FLIGHT_MODE(FAILSAFE_MODE))
-                p = "!FS!";
+                p = "F.S.";
             else if (FLIGHT_MODE(MANUAL_MODE))
-                p = "MANU";
+                p = "MAN ";
             else if (FLIGHT_MODE(NAV_RTH_MODE))
-                p = "RTH ";
+                p = "RTB ";
             else if (FLIGHT_MODE(NAV_POSHOLD_MODE))
                 p = "HOLD";
             else if (FLIGHT_MODE(NAV_CRUISE_MODE) && FLIGHT_MODE(NAV_ALTHOLD_MODE))
@@ -1648,9 +1628,9 @@ static bool osdDrawSingleElement(uint8_t item)
                 // If navigationRequiresAngleMode() returns false when ALTHOLD is active,
                 // it means it can be combined with ANGLE, HORIZON, ACRO, etc...
                 // and its display is handled by OSD_MESSAGES rather than OSD_FLYMODE.
-                p = " AH ";
+                p = "ALT ";
             } else if (FLIGHT_MODE(NAV_WP_MODE))
-                p = " WP ";
+                p = "WP  ";
             else if (FLIGHT_MODE(ANGLE_MODE))
                 p = "ANGL";
             else if (FLIGHT_MODE(HORIZON_MODE))
@@ -1846,24 +1826,18 @@ static bool osdDrawSingleElement(uint8_t item)
     case OSD_VARIO_NUM:
         {
             int16_t value = getEstimatedActualVelocity(Z);
-            char sym;
             switch ((osd_unit_e)osdConfig()->units) {
                 case OSD_UNIT_UK:
                     FALLTHROUGH;
                 case OSD_UNIT_IMPERIAL:
-                    // Convert to centifeet/s
-                    value = CENTIMETERS_TO_CENTIFEET(value);
-                    sym = SYM_FTS;
-                    break;
+                    FALLTHROUGH;
                 case OSD_UNIT_METRIC:
-                    // Already in cm/s
-                    sym = SYM_MS;
+                    // Convert to feet/min
+                    value = CENTIMETERS_TO_CENTIFEET(value) * 6 / 100 / 10 * 10;
                     break;
             }
 
-            osdFormatCentiNumber(buff, value, 0, 1, 0, 3);
-            buff[3] = sym;
-            buff[4] = '\0';
+            osdFormatCentiNumber(buff, value, 0, 0, 0, 5);
             break;
         }
 #endif
@@ -2053,7 +2027,7 @@ static bool osdDrawSingleElement(uint8_t item)
         {
         #ifdef USE_PITOT
             buff[0] = SYM_AIR;
-            osdFormatVelocityStr(buff + 1, pitot.airSpeed, false);
+            osdFormatVelocityStr(buff + 1, pitot.airSpeed);
         #else
             return false;
         #endif
@@ -2192,9 +2166,10 @@ static bool osdDrawSingleElement(uint8_t item)
                 osdDrawHeadingGraph(osdDisplayPort, osdGetDisplayPortCanvas(), OSD_DRAW_POINT_GRID(elemPosX, elemPosY), osdGetHeading());
                 return true;
             } else {
-                buff[0] = buff[2] = buff[4] = buff[6] = buff[8] = SYM_HEADING_LINE;
-                buff[1] = buff[3] = buff[5] = buff[7] = SYM_HEADING_DIVIDED_LINE;
-                buff[OSD_HEADING_GRAPH_WIDTH] = '\0';
+                memset(buff, ' ', OSD_HEADING_GRAPH_WIDTH);
+                int center = OSD_HEADING_GRAPH_WIDTH / 2;
+                buff[center] = buff[center - 1] = buff[center + 1] = '-';
+                buff[center + 2] = '\0';
             }
             break;
         }
@@ -2597,8 +2572,8 @@ void pgResetFn_osdConfig(osdConfig_t *osdConfig)
     // OSD_VARIO_NUM at the right of OSD_VARIO
     osdConfig->item_pos[0][OSD_VARIO_NUM] = OSD_POS(24, 7);
     osdConfig->item_pos[0][OSD_HOME_DIR] = OSD_POS(14, 11);
-    osdConfig->item_pos[0][OSD_ARTIFICIAL_HORIZON] = OSD_POS(8, 6) | OSD_VISIBLE_FLAG;
-    osdConfig->item_pos[0][OSD_HORIZON_SIDEBARS] = OSD_POS(8, 6) | OSD_VISIBLE_FLAG;
+    osdConfig->item_pos[0][OSD_ARTIFICIAL_HORIZON] = OSD_POS(7, 5) | OSD_VISIBLE_FLAG;
+    osdConfig->item_pos[0][OSD_HORIZON_SIDEBARS] = OSD_POS(7, 5) | OSD_VISIBLE_FLAG;
 
     osdConfig->item_pos[0][OSD_CRAFT_NAME] = OSD_POS(20, 2);
     osdConfig->item_pos[0][OSD_VTX_CHANNEL] = OSD_POS(8, 6);
@@ -2924,7 +2899,7 @@ static void osdShowStats(void)
 
     if (STATE(GPS_FIX)) {
         displayWrite(osdDisplayPort, statNameX, top, "MAX SPEED        :");
-        osdFormatVelocityStr(buff, stats.max_speed, true);
+        osdFormatVelocityStr(buff, stats.max_speed);
         osdLeftAlignString(buff);
         displayWrite(osdDisplayPort, statValuesX, top++, buff);
 
